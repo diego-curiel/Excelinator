@@ -290,6 +290,9 @@ def main():
         merge_datasets_kwargs["dataset_a"] = origin_matches
         result_df = merge_datasets(**merge_datasets_kwargs)
 
+    # Change all strings to uppercase (random requirement, lol)
+    str_to_uppercase = lambda x: str(x).upper() if isinstance(x, str) else x
+    result_df = result_df.map(str_to_uppercase)
    
     print("Saving file...")
     
