@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 
-def avoid_similar_columns(column_name: str, column_list: str) -> str:
+def avoid_similar_columns(column_name: str, column_list: list) -> str:
     """
     avoid_similar_columns
     ---------------------
@@ -26,7 +26,7 @@ def avoid_similar_columns(column_name: str, column_list: str) -> str:
     copy_count = 1 # one means original :), the name won't change
     while ult_name in column_list:
         copy_count += 1
-        ult_name = f"column_name_{copy_count}"
+        ult_name = f"{column_name}_{copy_count}"
 
     return ult_name
         
@@ -80,6 +80,60 @@ def mark_matches(dataset_a: pd.DataFrame, dataset_b: pd.DataFrame,
     return dataset_a.copy()
 
 
+def merge_datasets(dataset_a: pd.DataFrame, dataset_b: pd.DataFrame,
+                   index_column_a: str, index_column_b: str, 
+                   copy_columns: list[str|None]):
+    """
+    merge_datasets
+    --------------
+    This function takes two datasets, their index and the columns that will be
+    conserved before mergin both datasets. 
+    
+    args
+    ----
+    dataset_a: pd.DataFrame - The "left" table of the merge
+    dataset_b: pd.DataFrame - The "right" table of the merge
+    index_column_a: str - The position of the index in the left table
+    index_column_b: str - The position of the index in the right table
+    copy_columns: str - The array of columns to be copied
+    """
+    # Half an hour debuging just to be solved by adding .copy(), smh
+    needed_columns = copy_columns.copy()
+    needed_columns.append(index_column_b)
+    # Check if the columns exist in the partner file
+    nonexistent_columns = [
+            x for x in needed_columns if x not in dataset_b.columns
+        ]
+    if nonexistent_columns:
+        error_message = "The following columns do not appear in the partner file: {cols}"
+        raise SystemExit(
+                error_message.format(cols=nonexistent_columns)
+            )
+    # Drop unnecessary columns from the partner dataset
+    unneeded_partner_columns = [
+            x for x in dataset_b.columns if x not in needed_columns
+        ]
+    # This declaration is just a way to create a copy of the object
+    dataset_b = dataset_b.drop(columns=unneeded_partner_columns, inplace=False)
+    dataset_b.drop_duplicates(subset=index_column_b, inplace=True, 
+                              ignore_index=True)
+    # Small fix to avoid duplicated columns
+    new_columns_set = list()
+    # Remove the index column from this proccess, otherwise the name may change 
+    for column in dataset_b.columns:
+        if column in copy_columns:
+            column = avoid_similar_columns(column_name=str(column), 
+                                           column_list=list(dataset_a.columns))
+        new_columns_set.append(column)
+
+    dataset_b.columns = new_columns_set
+
+    # Let's merge
+    result_df = pd.merge(left=dataset_a, right=dataset_b, left_on=index_column_a,
+                      right_on=index_column_b)
+    return result_df
+      
+
 def main():
     parser = ap.ArgumentParser(
             prog='The Excelinator',
@@ -117,8 +171,10 @@ def main():
     # Column in reference spreadsheet to be copied
     parser.add_argument(
         '-c', 
-        '--copy-column', 
-        help='Column in reference spreadsheet to be copied'
+        '--copy-columns',
+        nargs='*',
+        default=list(),
+        help='Columns in the partner spreadsheet to be copied'
     )
 
     # Remove missmatches
@@ -195,7 +251,7 @@ def main():
     print("Reading the partner file...")
     partner_df = read_functions[partner_file_extension](**partner_read_function)
     
-    mark_matches_kwargs: dict[Any, Any] = {
+    mark_matches_kwargs: Dict[Any, Any] = {
             "dataset_b":partner_df,
             "index_column_a":args.origin_index,
             "index_column_b":args.partner_index,
@@ -205,19 +261,37 @@ def main():
             "drop_missmatches":args.delete_missmatches,
         }
 
+    merge_datasets_kwargs: Dict[Any, Any] = {
+            "dataset_b":partner_df,
+            "index_column_a":args.origin_index,
+            "index_column_b":args.partner_index,
+            "copy_columns":args.copy_columns
+        }
+
     result_df = pd.DataFrame()
     if lazy_load:
         print("Your origin file seems heavy, reading in lazy load mode...")
         for chunk in origin_df:
+            # Find the chunk matches
             mark_matches_kwargs["dataset_a"] = chunk
             chunk_matches = mark_matches(**mark_matches_kwargs)
-            result_df = pd.concat([result_df, chunk_matches])
+            # Merge the chunk with the needed columns
+            merge_datasets_kwargs["dataset_a"] = chunk_matches
+            ult_chunk = merge_datasets(**mark_matches_kwargs)
+            # Append the chunk to the final result
+            result_df = pd.concat([result_df, ult_chunk])
+
 
     else:
         print("Reading origin file in normal mode...")
+        # Find the origin file matches
         mark_matches_kwargs["dataset_a"] = origin_df.copy()
-        result_df = mark_matches(**mark_matches_kwargs)
-    
+        origin_matches = mark_matches(**mark_matches_kwargs)
+        # Merge the origin file with the needed columns
+        merge_datasets_kwargs["dataset_a"] = origin_matches
+        result_df = merge_datasets(**merge_datasets_kwargs)
+
+   
     print("Saving file...")
     
     save_date = time.strftime(r"%y%m%d-%H-%M-%S", time.localtime())
