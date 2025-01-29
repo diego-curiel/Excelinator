@@ -294,8 +294,8 @@ def main():
     print("Saving file...")
     
     save_date = time.strftime(r"%y%m%d-%H-%M-%S", time.localtime())
-    save_path = origin_path.parent.joinpath(f"RESULTS-{save_date}.xlsx")
-    result_df.to_excel(save_path, index=False)
+    save_path = origin_path.parent.joinpath(f"RESULTS-{save_date}.csv")
+    result_df.to_csv(save_path, index=False, encoding="UTF-8")
 
 
 if __name__ == "__main__":
