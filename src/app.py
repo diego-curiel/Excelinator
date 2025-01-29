@@ -231,6 +231,7 @@ def main():
     origin_file_size = os.path.getsize(origin_path)
     if origin_file_extension == "csv" and origin_file_size >= MAX_BYTES_SIZE:
         origin_read_function["chunksize"] = 100000 # A hundred thousand!
+        origin_read_function["low_memory"] = False # Not necessary to have this
         lazy_load = True
 
     # Summon the correct pd.read_x function according to the file extension
