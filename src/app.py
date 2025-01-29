@@ -277,11 +277,9 @@ def main():
             chunk_matches = mark_matches(**mark_matches_kwargs)
             # Merge the chunk with the needed columns
             merge_datasets_kwargs["dataset_a"] = chunk_matches
-            ult_chunk = merge_datasets(**mark_matches_kwargs)
+            ult_chunk = merge_datasets(**merge_datasets_kwargs)
             # Append the chunk to the final result
             result_df = pd.concat([result_df, ult_chunk])
-
-
     else:
         print("Reading origin file in normal mode...")
         # Find the origin file matches
