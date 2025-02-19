@@ -80,6 +80,7 @@ def mark_matches(dataset_a: pd.DataFrame, dataset_b: pd.DataFrame,
     return dataset_a.copy()
 
 
+
 def merge_datasets(dataset_a: pd.DataFrame, dataset_b: pd.DataFrame,
                    index_column_a: str, index_column_b: str, 
                    copy_columns: list[str|None]):
@@ -134,7 +135,16 @@ def merge_datasets(dataset_a: pd.DataFrame, dataset_b: pd.DataFrame,
     return result_df
       
 
-def main():
+def get_system_args() -> ap.Namespace:
+    """
+    Description
+    -----------
+    Generates the script system arguments.
+    ---
+    Return
+    ------
+    ap.Namespace = Parsed system arguments.
+    """
     parser = ap.ArgumentParser(
             prog='The Excelinator',
             description= 'Compare two spreadsheets and mark matches',
@@ -185,7 +195,11 @@ def main():
         action='store_true'
     )
 
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main():
+    args = get_system_args()
 
     # Get both origin and partner files location
     origin_path = Path(args.origin)
@@ -270,6 +284,7 @@ def main():
         }
 
     result_df = pd.DataFrame()
+
     if lazy_load:
         print("Your origin file seems heavy, reading in lazy load mode...")
         for chunk in origin_df:
