@@ -131,7 +131,7 @@ def merge_datasets(dataset_a: pd.DataFrame, dataset_b: pd.DataFrame,
 
     # Let's merge
     result_df = pd.merge(left=dataset_a, right=dataset_b, left_on=index_column_a,
-                      right_on=index_column_b)
+                      right_on=index_column_b, how="left")
     return result_df
       
 
@@ -299,11 +299,13 @@ def main():
     else:
         print("Reading origin file in normal mode...")
         # Find the origin file matches
-        mark_matches_kwargs["dataset_a"] = origin_df.copy()
+        mark_matches_kwargs["dataset_a"] = origin_df
         origin_matches = mark_matches(**mark_matches_kwargs)
+        print(origin_matches)
         # Merge the origin file with the needed columns
         merge_datasets_kwargs["dataset_a"] = origin_matches
         result_df = merge_datasets(**merge_datasets_kwargs)
+        print(result_df)
 
     # Change all strings to uppercase (random requirement, lol)
     str_to_uppercase = lambda x: str(x).upper() if isinstance(x, str) else x
