@@ -306,8 +306,9 @@ def main():
         result_df = merge_datasets(**merge_datasets_kwargs)
 
     # Change all strings to uppercase (random requirement, lol)
-    str_to_uppercase = lambda x: str(x).upper() if isinstance(x, str) else x
-    result_df = result_df.map(str_to_uppercase)
+    to_upper = lambda x: str(x).upper() if isinstance(x, str) else x
+    result_df = result_df.map(to_upper)
+    result_df.columns = [to_upper(x) for x in result_df.columns]
    
     print("Saving file...")
     
