@@ -7,6 +7,76 @@ from pathlib import Path
 from typing import Any, Dict
 
 
+def get_system_args() -> ap.Namespace:
+    """
+    Description
+    -----------
+    Generates the script system arguments.
+    ---
+    Return
+    ------
+    ap.Namespace = Parsed system arguments.
+    """
+    parser = ap.ArgumentParser(
+            prog='The Excelinator',
+            description= 'Compare two spreadsheets and mark matches',
+    )
+    # First Spreadsheet 
+    parser.add_argument('-o', '--origin', help='First spreadsheet', 
+                        required=True)
+    # First Spreadsheet Index Column
+    parser.add_argument(
+        '-x',
+        '--origin-index', 
+        help='Name or position of the index column in the origin spreadsheet',
+        required=True
+    )
+    # Second Spreadsheet
+    parser.add_argument('-p', '--partner', help='Second spreadsheet', 
+                        required =True)
+    # # Second Spreadsheet Index Column
+    parser.add_argument(
+        '-y', 
+        '--partner-index', 
+        help='Name or position of the index column in the partner spreadsheet',
+        required=True
+    )
+    # Match Symbol
+    parser.add_argument('-m', '--match-marker', 
+                        help='Symbol or string to mark matches', default="1")
+    # Missmatch Symbol
+    parser.add_argument('-n', '--missmatch-marker',
+                        help='Symbol to mark missmatches', default="0")
+    # Results column name
+    parser.add_argument('-r', '--results-column',
+                        help='Name of the results column', default="RESULTS")
+    # Column in reference spreadsheet to be copied
+    parser.add_argument(
+        '-c', 
+        '--copy-columns',
+        nargs='*',
+        default=list(),
+        help='Columns in the partner spreadsheet to be copied'
+    )
+    # Remove missmatches
+    parser.add_argument(
+        '-d',
+        '--delete-missmatches',
+        help='Delete rows that did not match in both files',
+        action='store_true'
+    )
+
+    # Set textfields to uppercase
+    parser.add_argument(
+        '-u',
+        '--uppercase',
+        help='Set all textfields (including the header) to uppercase.',
+        action='store_true'
+    )
+
+    return parser.parse_args()
+
+
 def avoid_similar_columns(column_name: str, column_list: list) -> str:
     """
     avoid_similar_columns
@@ -80,7 +150,6 @@ def mark_matches(dataset_a: pd.DataFrame, dataset_b: pd.DataFrame,
     return dataset_a.copy()
 
 
-
 def merge_datasets(dataset_a: pd.DataFrame, dataset_b: pd.DataFrame,
                    index_column_a: str, index_column_b: str, 
                    copy_columns: list[str|None]):
@@ -133,77 +202,14 @@ def merge_datasets(dataset_a: pd.DataFrame, dataset_b: pd.DataFrame,
     result_df = pd.merge(left=dataset_a, right=dataset_b, left_on=index_column_a,
                       right_on=index_column_b, how="left")
     return result_df
-      
-
-def get_system_args() -> ap.Namespace:
-    """
-    Description
-    -----------
-    Generates the script system arguments.
-    ---
-    Return
-    ------
-    ap.Namespace = Parsed system arguments.
-    """
-    parser = ap.ArgumentParser(
-            prog='The Excelinator',
-            description= 'Compare two spreadsheets and mark matches',
-    )
-    # First Spreadsheet 
-    parser.add_argument('-o', '--origin', help='First spreadsheet', 
-                        required=True)
-    # First Spreadsheet Index Column
-    parser.add_argument(
-        '-x',
-        '--origin-index', 
-        help='Name or position of the index column in the origin spreadsheet',
-        required=True
-    )
-    # Second Spreadsheet
-    parser.add_argument('-p', '--partner', help='Second spreadsheet', 
-                        required =True)
-    # # Second Spreadsheet Index Column
-    parser.add_argument(
-        '-y', 
-        '--partner-index', 
-        help='Name or position of the index column in the partner spreadsheet',
-        required=True
-    )
-    # Match Symbol
-    parser.add_argument('-m', '--match-marker', 
-                        help='Symbol or string to mark matches', default="1")
-    # Missmatch Symbol
-    parser.add_argument('-n', '--missmatch-marker',
-                        help='Symbol to mark missmatches', default="0")
-    # Results column name
-    parser.add_argument('-r', '--results-column',
-                        help='Name of the results column', default="RESULTS")
-    # Column in reference spreadsheet to be copied
-    parser.add_argument(
-        '-c', 
-        '--copy-columns',
-        nargs='*',
-        default=list(),
-        help='Columns in the partner spreadsheet to be copied'
-    )
-
-    # Remove missmatches
-    parser.add_argument(
-        '-d',
-        '--delete-missmatches',
-        help='Delete rows that did not match in both files',
-        action='store_true'
-    )
-
-    return parser.parse_args()
 
 
 def main():
-    args = get_system_args()
+    sys_args = get_system_args()
 
     # Get both origin and partner files location
-    origin_path = Path(args.origin)
-    partner_path = Path(args.partner)
+    origin_path = Path(sys_args.origin)
+    partner_path = Path(sys_args.partner)
     
     # Check if both the origin_path and partner_path exist
     if not origin_path.exists():
@@ -268,19 +274,19 @@ def main():
     
     mark_matches_kwargs: Dict[Any, Any] = {
             "dataset_b":partner_df,
-            "index_column_a":args.origin_index,
-            "index_column_b":args.partner_index,
-            "result_column_name":args.results_column,
-            "match_marker":args.match_marker,
-            "missmatch_marker":args.missmatch_marker,
-            "drop_missmatches":args.delete_missmatches,
+            "index_column_a":sys_args.origin_index,
+            "index_column_b":sys_args.partner_index,
+            "result_column_name":sys_args.results_column,
+            "match_marker":sys_args.match_marker,
+            "missmatch_marker":sys_args.missmatch_marker,
+            "drop_missmatches":sys_args.delete_missmatches,
         }
 
     merge_datasets_kwargs: Dict[Any, Any] = {
             "dataset_b":partner_df,
-            "index_column_a":args.origin_index,
-            "index_column_b":args.partner_index,
-            "copy_columns":args.copy_columns
+            "index_column_a":sys_args.origin_index,
+            "index_column_b":sys_args.partner_index,
+            "copy_columns":sys_args.copy_columns
         }
 
     result_df = pd.DataFrame()
@@ -306,9 +312,10 @@ def main():
         result_df = merge_datasets(**merge_datasets_kwargs)
 
     # Change all strings to uppercase (random requirement, lol)
-    to_upper = lambda x: str(x).upper() if isinstance(x, str) else x
-    result_df = result_df.map(to_upper)
-    result_df.columns = [to_upper(x) for x in result_df.columns]
+    if sys_args.uppercase:
+        to_upper = lambda x: str(x).upper() if isinstance(x, str) else x
+        result_df = result_df.map(to_upper)
+        result_df.columns = [to_upper(x) for x in result_df.columns]
    
     print("Saving file...")
     
