@@ -225,53 +225,57 @@ def merge_datasets(dataset_a: pd.DataFrame, dataset_b: pd.DataFrame,
 
 
 def main():
-    sys_args = get_system_args()
+    # App Constants
+    SYS_ARGS = get_system_args()
 
     # Get both origin and partner files location
-    origin_path = sys_args.origin 
-    partner_path = sys_args.partner 
+    ORIGIN_PATH = SYS_ARGS.origin 
+    PARTNER_PATH = SYS_ARGS.partner 
     
     # Save file path
-    save_path = sys_args.save_file
+    SAVE_PATH = SYS_ARGS.save_file
+
+    # Dictionary that contains a read function acording to the filetype
+    READ_FUNCTIONS = {
+        "csv": pd.read_csv,
+        "xlsx": pd.read_excel
+    }
+
+    # AKA 14MiB
+    MAX_BYTES_SIZE = 14680064
 
     # Check if both the origin_path and partner_path exist
-    if not origin_path.exists():
+    if not ORIGIN_PATH.exists():
         raise SystemExit("The origin file doesn't exist")
-    if not partner_path.exists():
+    if not PARTNER_PATH.exists():
         raise SystemExit("The partner file doesn't exist")
     
     # Check the file extension for both the origin and partner files
     # I should replace this with libmagic, but I don't see the necessity
-    origin_file_extension = origin_path.name.split(".")[-1]
-    partner_file_extension = partner_path.name.split(".")[-1]
-    # Dictionary that contains a read function acording to the filetype
-    read_functions = {
-            "csv": pd.read_csv,
-            "xlsx": pd.read_excel
-    }
+    origin_file_extension = ORIGIN_PATH.name.split(".")[-1]
+    partner_file_extension = PARTNER_PATH.name.split(".")[-1]
+
     # Check if both origin and partner files have a compatible extension
-    if not origin_file_extension in read_functions:
+    if not origin_file_extension in READ_FUNCTIONS:
         raise SystemExit(
                 "The origin file is neither an xlsx nor an csv"
             )
-    if not partner_file_extension in read_functions:
+    if not partner_file_extension in READ_FUNCTIONS:
         raise SystemExit(
                 "The partner file is neither an xlsx nor a csv"
             )
 
     origin_read_function: Dict[Any, Any] = {}
     partner_read_function: Dict[Any, Any] = {}
-    # AKA 14MiB
-    MAX_BYTES_SIZE = 14680064
     lazy_load = False
     # Select the correct kwargs for each read_x function
     if origin_file_extension == "xlsx":
-        origin_read_function["io"] = origin_path
+        origin_read_function["io"] = ORIGIN_PATH
     else:
-        origin_read_function["filepath_or_buffer"] = origin_path
+        origin_read_function["filepath_or_buffer"] = ORIGIN_PATH
 
     # Change chunksize if the origin file size exceeds the max size
-    origin_file_size = os.path.getsize(origin_path)
+    origin_file_size = os.path.getsize(ORIGIN_PATH)
     if origin_file_extension == "csv" and origin_file_size >= MAX_BYTES_SIZE:
         origin_read_function["chunksize"] = 100000 # A hundred thousand!
         origin_read_function["low_memory"] = False # Not necessary to have this
@@ -280,7 +284,7 @@ def main():
     # Summon the correct pd.read_x function according to the file extension
     # Add kwargs previously selected
     print("Reading the origin file...")
-    origin_df = read_functions[origin_file_extension](**origin_read_function)
+    origin_df = READ_FUNCTIONS[origin_file_extension](**origin_read_function)
 
     # Remove the "chunksize" kwarg in order to read the partner file (not needed)
     # Change the io path
@@ -288,28 +292,28 @@ def main():
         del origin_read_function["chunksize"]
     
     if partner_file_extension == "xlsx":
-        partner_read_function["io"] = partner_path
+        partner_read_function["io"] = PARTNER_PATH
     else:
-        partner_read_function["filepath_or_buffer"] = partner_path
+        partner_read_function["filepath_or_buffer"] = PARTNER_PATH
       
     print("Reading the partner file...")
-    partner_df = read_functions[partner_file_extension](**partner_read_function)
+    partner_df = READ_FUNCTIONS[partner_file_extension](**partner_read_function)
     
     mark_matches_kwargs: Dict[Any, Any] = {
             "dataset_b":partner_df,
-            "index_column_a":sys_args.origin_index,
-            "index_column_b":sys_args.partner_index,
-            "result_column_name":sys_args.results_column,
-            "match_marker":sys_args.match_marker,
-            "missmatch_marker":sys_args.missmatch_marker,
-            "drop_missmatches":sys_args.delete_missmatches,
+            "index_column_a":SYS_ARGS.origin_index,
+            "index_column_b":SYS_ARGS.partner_index,
+            "result_column_name":SYS_ARGS.results_column,
+            "match_marker":SYS_ARGS.match_marker,
+            "missmatch_marker":SYS_ARGS.missmatch_marker,
+            "drop_missmatches":SYS_ARGS.delete_missmatches,
         }
 
     merge_datasets_kwargs: Dict[Any, Any] = {
             "dataset_b":partner_df,
-            "index_column_a":sys_args.origin_index,
-            "index_column_b":sys_args.partner_index,
-            "copy_columns":sys_args.copy_columns
+            "index_column_a":SYS_ARGS.origin_index,
+            "index_column_b":SYS_ARGS.partner_index,
+            "copy_columns":SYS_ARGS.copy_columns
         }
 
     result_df = pd.DataFrame()
@@ -335,14 +339,14 @@ def main():
         result_df = merge_datasets(**merge_datasets_kwargs)
 
     # Change all strings to uppercase (random requirement, lol)
-    if sys_args.uppercase:
+    if SYS_ARGS.uppercase:
         to_upper = lambda x: str(x).upper() if isinstance(x, str) else x
         result_df = result_df.map(to_upper)
         result_df.columns = [to_upper(x) for x in result_df.columns]
    
     print("Saving file...")
     
-    result_df.to_csv(save_path, index=False, encoding="UTF-8")
+    result_df.to_csv(SAVE_PATH, index=False, encoding="UTF-8")
 
 
 if __name__ == "__main__":
