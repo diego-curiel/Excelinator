@@ -54,9 +54,10 @@ def get_system_args() -> ap.Namespace:
     parser.add_argument(
         '-c', 
         '--copy-columns',
+        help='Columns in the partner spreadsheet to be copied',
         nargs='*',
         default=list(),
-        help='Columns in the partner spreadsheet to be copied'
+        type=list
     )
     # Remove missmatches
     parser.add_argument(
@@ -65,7 +66,6 @@ def get_system_args() -> ap.Namespace:
         help='Delete rows that did not match in both files',
         action='store_true'
     )
-
     # Set textfields to uppercase
     parser.add_argument(
         '-u',
@@ -73,6 +73,15 @@ def get_system_args() -> ap.Namespace:
         help='Set all textfields (including the header) to uppercase.',
         action='store_true'
     )
+    # Save file path
+    parser.add_argument(
+        '-f',
+        '--save-file',
+        help='Path to the save file',
+        type=Path,
+        required=True
+    )
+
 
     return parser.parse_args()
 
@@ -211,6 +220,9 @@ def main():
     origin_path = Path(sys_args.origin)
     partner_path = Path(sys_args.partner)
     
+    # Save file path
+    save_path = sys_args.save_file
+
     # Check if both the origin_path and partner_path exist
     if not origin_path.exists():
         raise SystemExit("The origin file doesn't exist")
@@ -319,8 +331,6 @@ def main():
    
     print("Saving file...")
     
-    save_date = time.strftime(r"%y%m%d-%H-%M-%S", time.localtime())
-    save_path = origin_path.parent.joinpath(f"RESULTS-{save_date}.csv")
     result_df.to_csv(save_path, index=False, encoding="UTF-8")
 
 
