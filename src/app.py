@@ -19,42 +19,53 @@ def get_system_args() -> ap.Namespace:
     """
     parser = ap.ArgumentParser(
             prog='The Excelinator',
-            description= 'Compare two spreadsheets and mark matches',
+            description= '''Compare two spreadsheets, mark matches and merge by
+            left join.'''
     )
     # First Spreadsheet 
-    parser.add_argument('-o', '--origin', help='First spreadsheet', 
-                        required=True)
+    parser.add_argument(
+        '-o', '--origin', 
+        help='Left spreadsheet or dataset file path.', 
+        required=True, 
+        type=Path
+    )
     # First Spreadsheet Index Column
     parser.add_argument(
         '-x',
         '--origin-index', 
-        help='Name or position of the index column in the origin spreadsheet',
+        help='Name or position of the index column in the origin spreadsheet.',
         required=True
     )
     # Second Spreadsheet
-    parser.add_argument('-p', '--partner', help='Second spreadsheet', 
-                        required =True)
+    parser.add_argument(
+        '-p', '--partner', 
+        help='Right spreadsheet or dataset file path.', 
+        required=True, 
+        type=Path
+    )
     # # Second Spreadsheet Index Column
     parser.add_argument(
         '-y', 
         '--partner-index', 
-        help='Name or position of the index column in the partner spreadsheet',
+        help='Name or position of the index column in the partner file.',
         required=True
     )
     # Match Symbol
     parser.add_argument('-m', '--match-marker', 
-                        help='Symbol or string to mark matches', default="1")
+                        help='Symbol or text to mark matches.', 
+                        default="1")
     # Missmatch Symbol
     parser.add_argument('-n', '--missmatch-marker',
-                        help='Symbol to mark missmatches', default="0")
+                        help='Symbol or text to mark missmatches.', 
+                        default="0")
     # Results column name
     parser.add_argument('-r', '--results-column',
-                        help='Name of the results column', default="RESULTS")
+                        help='Name for the results column.', default="RESULTS")
     # Column in reference spreadsheet to be copied
     parser.add_argument(
         '-c', 
         '--copy-columns',
-        help='Columns in the partner spreadsheet to be copied',
+        help='Columns in the partner file to be copied into the save file.',
         nargs='*',
         default=list(),
         type=list
@@ -63,7 +74,7 @@ def get_system_args() -> ap.Namespace:
     parser.add_argument(
         '-d',
         '--delete-missmatches',
-        help='Delete rows that did not match in both files',
+        help='Delete the rows that did not match in both files.',
         action='store_true'
     )
     # Set textfields to uppercase
@@ -217,8 +228,8 @@ def main():
     sys_args = get_system_args()
 
     # Get both origin and partner files location
-    origin_path = Path(sys_args.origin)
-    partner_path = Path(sys_args.partner)
+    origin_path = sys_args.origin 
+    partner_path = sys_args.partner 
     
     # Save file path
     save_path = sys_args.save_file
