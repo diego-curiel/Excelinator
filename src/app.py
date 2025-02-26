@@ -1,9 +1,10 @@
 import pandas as pd
 
 import argparse as ap
+import magic as mg
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 
 def get_system_args() -> ap.Namespace:
@@ -92,7 +93,6 @@ def get_system_args() -> ap.Namespace:
         required=True
     )
 
-
     return parser.parse_args()
 
 
@@ -124,7 +124,7 @@ def mark_matches(dataset_a: pd.DataFrame, dataset_b: pd.DataFrame,
                  index_column_a: str, index_column_b: str, 
                  result_column_name: str, match_marker: str, 
                  missmatch_marker: int|str, 
-                 drop_missmatches: bool) -> pd.DataFrame:
+                 drop_missmatches: bool=False) -> pd.DataFrame:
     """
     mark_matches
     ------------
@@ -146,7 +146,7 @@ def mark_matches(dataset_a: pd.DataFrame, dataset_b: pd.DataFrame,
         raise SystemExit(
                 "The index column name for the origin file is invalid"
             )
-    
+
     if not index_column_b in dataset_b:
         raise SystemExit(
                 "The index column name for the partner file is invalid"
@@ -156,15 +156,16 @@ def mark_matches(dataset_a: pd.DataFrame, dataset_b: pd.DataFrame,
             True: match_marker,
             False: missmatch_marker,
         }
- 
-    dataset_a[result_column_name] = dataset_a[index_column_a].isin(
-                dataset_b[index_column_b]
+    
+    map_a = dataset_a.loc[:,index_column_a]
+    map_b = dataset_b.loc[:, index_column_b]
+    dataset_a[result_column_name] = map_a.isin(
+               map_b 
             ).map(lambda x: mapping.get(bool(x), x))
 
     # Remove missmatches
     if drop_missmatches:
-        dataset_a = dataset_a[dataset_a[result_column_name] == match_marker]
-
+        dataset_a = dataset_a.loc[dataset_a[result_column_name] == match_marker]
 
     return dataset_a.copy()
 
@@ -223,6 +224,107 @@ def merge_datasets(dataset_a: pd.DataFrame, dataset_b: pd.DataFrame,
     return result_df
 
 
+def get_filename_extension(file_path:Path) -> str:
+    """Description:
+    Takes a file path and returns the extension that is contained in the file
+    name. This function does not needs the file to be readable but raises an 
+    SystemExit exception if the file does not exist.
+    
+    Parameters:
+    file_path (Path): Path to the file whose extension will be extracted.
+
+    Raise:
+    SystemExit: If the file does not exist.
+
+    Returns:
+    str: Name of the file extension (e.g., 'xlsx', 'csv').
+    """
+    if not file_path.exists():
+        raise SystemExit(
+            "The file {f} does not exist".format(f=file_path)
+        )
+
+    return str(file_path).split(".")[-1]
+
+
+def get_real_extension(file_path:Path) -> str:
+    """Description:
+    Takes a file path and returns the real extension of the file using libmagic.
+    Raises a SystemExit exception if the file does not exist or it is not readable.
+
+    Parameters:
+    file_path (Path): Path to the file whose extension will be guessed.
+    
+    Raise:
+    SystemExit: If the file does not exist, or it is not accessable.
+    SystemExit: If the filetype is not supported. 
+
+    Returns:
+    str: Name of the file extension (e.g., 'xlsx', 'csv').
+    """
+    # Dictionary of mime and extensions
+    MIME_EXTENSIONS = {
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+        "text/csv": "csv"
+    }
+    # Check if the file is readable
+    if not file_path.exists or not os.access(file_path, os.R_OK):
+        raise SystemExit(
+                "The file: {f} does not exist, or it is not readable.".format(
+                    f=file_path
+                )
+        )
+    # Get file extension
+    file_mime = mg.from_file(file_path, mime=True)
+    file_extension = MIME_EXTENSIONS.get(file_mime, None)
+    # Exception if the mimetype is invalid
+    if file_extension is None:
+        raise SystemExit(
+            "The file type of: {f} is not supported. Supported file types: {t}".format(
+                f=file_path,
+                t="Excel 2007+, CSV"
+            )
+        )
+
+    return file_extension
+
+
+def get_read_kwargs(file_path:Path|str, file_extension:str, 
+                    lazy_load:bool=False) -> dict:
+    """
+    Description:
+    Takes the file extension and returns the appropriate parameters for the 
+    Pandas read function, whether it's `pd.read_csv` or `pd.read_excel`.
+    Returns an empty dictionary if the file extension is invalid.
+
+    Parameters:
+    file_path (Path|str): Path to the file to be passed inside the kwargs as input.
+    file_extension (str): Input file extension (e.g., 'xlsx'). Case-insensitive.
+    lazy_load (bool, default: False): If True, sets `chunksize` in kwargs for lazy loading.
+
+    Returns:
+    dict: The kwargs for the appropriate Pandas read function.
+    dict: An empty dictionary if the file extension is invalid.
+    """
+
+    if isinstance(file_path, str):
+        file_path = Path(file_path)
+    
+    read_kwargs = dict()
+    # Select the correct parameter for the type file
+    if file_extension == "xlsx":
+        read_kwargs["io"] = file_path
+
+    elif file_extension == "csv": 
+        read_kwargs["filepath_or_buffer"] = file_path
+        # Change chunksize if the origin file size exceeds the max size
+        if lazy_load:
+            read_kwargs["chunksize"] = 100000 # A hundred thousand!
+            read_kwargs["low_memory"] = False # Not necessary
+
+    return read_kwargs
+
+
 def main():
     # App Constants
     SYS_ARGS = get_system_args()
@@ -243,62 +345,34 @@ def main():
     # AKA 14MiB
     MAX_BYTES_SIZE = 14680064
 
-    # Check if both the origin_path and partner_path exist
-    if not ORIGIN_PATH.exists():
-        raise SystemExit("The origin file doesn't exist")
-    if not PARTNER_PATH.exists():
-        raise SystemExit("The partner file doesn't exist")
-    
-    # Check the file extension for both the origin and partner files
-    # I should replace this with libmagic, but I don't see the necessity
-    origin_file_extension = ORIGIN_PATH.name.split(".")[-1]
-    partner_file_extension = PARTNER_PATH.name.split(".")[-1]
+    # Check the file extension for both the origin and partner files.
+    # This function checks if the file exists and if it is readable, too.
+    # Also checks if the file mime is compatible (Too many responsabilities...).
+    ORIGIN_EXTENSION = get_real_extension(ORIGIN_PATH)
+    PARTNER_EXTENSION = get_real_extension(PARTNER_PATH)
+    # Read the origin file size in bytes.
+    ORIGIN_BYTESIZE = os.path.getsize(ORIGIN_PATH)
+    # If the origin file should be read with lazy loading
+    ORIGIN_LAZY_LOAD = ORIGIN_BYTESIZE >= MAX_BYTES_SIZE
 
-    # Check if both origin and partner files have a compatible extension
-    if not origin_file_extension in READ_FUNCTIONS:
-        raise SystemExit(
-                "The origin file is neither an xlsx nor an csv"
-            )
-    if not partner_file_extension in READ_FUNCTIONS:
-        raise SystemExit(
-                "The partner file is neither an xlsx nor a csv"
-            )
+    # Select the correct kwargs for the origin type file
+    origin_read_kwargs = get_read_kwargs(file_path=ORIGIN_PATH, 
+                                         file_extension=ORIGIN_EXTENSION,
+                                         lazy_load=ORIGIN_LAZY_LOAD) 
 
-    origin_read_function: Dict[Any, Any] = {}
-    partner_read_function: Dict[Any, Any] = {}
-    lazy_load = False
-    # Select the correct kwargs for each read_x function
-    if origin_file_extension == "xlsx":
-        origin_read_function["io"] = ORIGIN_PATH
-    else:
-        origin_read_function["filepath_or_buffer"] = ORIGIN_PATH
-
-    # Change chunksize if the origin file size exceeds the max size
-    origin_file_size = os.path.getsize(ORIGIN_PATH)
-    if origin_file_extension == "csv" and origin_file_size >= MAX_BYTES_SIZE:
-        origin_read_function["chunksize"] = 100000 # A hundred thousand!
-        origin_read_function["low_memory"] = False # Not necessary to have this
-        lazy_load = True
-
-    # Summon the correct pd.read_x function according to the file extension
-    # Add kwargs previously selected
+    # Apply kwargs and select the correct function according to the file type
     print("Reading the origin file...")
-    origin_df = READ_FUNCTIONS[origin_file_extension](**origin_read_function)
+    origin_df = READ_FUNCTIONS[ORIGIN_EXTENSION](**origin_read_kwargs)
 
-    # Remove the "chunksize" kwarg in order to read the partner file (not needed)
-    # Change the io path
-    if "chunksize" in origin_read_function:
-        del origin_read_function["chunksize"]
-    
-    if partner_file_extension == "xlsx":
-        partner_read_function["io"] = PARTNER_PATH
-    else:
-        partner_read_function["filepath_or_buffer"] = PARTNER_PATH
+    # Set the correct kwargs for the partner type file 
+    partner_read_kwargs = get_read_kwargs(file_path=PARTNER_PATH,
+                                          file_extension=PARTNER_EXTENSION,
+                                          lazy_load=False) # <- Not supported
       
     print("Reading the partner file...")
-    partner_df = READ_FUNCTIONS[partner_file_extension](**partner_read_function)
+    partner_df = READ_FUNCTIONS[PARTNER_EXTENSION](**partner_read_kwargs)
     
-    mark_matches_kwargs: Dict[Any, Any] = {
+    mark_matches_kwargs: dict[Any, Any] = {
             "dataset_b":partner_df,
             "index_column_a":SYS_ARGS.origin_index,
             "index_column_b":SYS_ARGS.partner_index,
@@ -308,7 +382,7 @@ def main():
             "drop_missmatches":SYS_ARGS.delete_missmatches,
         }
 
-    merge_datasets_kwargs: Dict[Any, Any] = {
+    merge_datasets_kwargs: dict[Any, Any] = {
             "dataset_b":partner_df,
             "index_column_a":SYS_ARGS.origin_index,
             "index_column_b":SYS_ARGS.partner_index,
@@ -317,7 +391,7 @@ def main():
 
     result_df = pd.DataFrame()
 
-    if lazy_load:
+    if ORIGIN_LAZY_LOAD:
         print("Your origin file seems heavy, reading in lazy load mode...")
         for chunk in origin_df:
             # Find the chunk matches
@@ -344,7 +418,6 @@ def main():
         result_df.columns = [to_upper(x) for x in result_df.columns]
    
     print("Saving file...")
-    
     result_df.to_csv(SAVE_PATH, index=False, encoding="UTF-8")
 
 
