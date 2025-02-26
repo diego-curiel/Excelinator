@@ -239,16 +239,9 @@ def get_filename_extension(file_path:Path) -> str:
     Parameters:
     file_path (Path): Path to the file whose extension will be extracted.
 
-    Raise:
-    SystemExit: If the file does not exist.
-
     Returns:
     str: Name of the file extension (e.g., 'xlsx', 'csv').
     """
-    if not file_path.exists():
-        raise SystemExit(
-            "The file {f} does not exist".format(f=file_path)
-        )
     return file_path.suffix.strip('.') 
 
 
