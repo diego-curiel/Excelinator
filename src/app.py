@@ -68,7 +68,6 @@ def get_system_args() -> ap.Namespace:
         help='Columns in the partner file to be copied into the save file.',
         nargs='*',
         default=list(),
-        type=list
     )
     # Remove missmatches
     parser.add_argument(
@@ -397,19 +396,23 @@ def main():
             # Find the chunk matches
             mark_matches_kwargs["dataset_a"] = chunk
             chunk_matches = mark_matches(**mark_matches_kwargs)
-            # Merge the chunk with the needed columns
-            merge_datasets_kwargs["dataset_a"] = chunk_matches
-            ult_chunk = merge_datasets(**merge_datasets_kwargs)
+            if SYS_ARGS.copy_columns:
+                # Merge the chunk with the needed columns
+                merge_datasets_kwargs["dataset_a"] = chunk_matches
+                chunk_matches = merge_datasets(**merge_datasets_kwargs)
+
             # Append the chunk to the final result
-            result_df = pd.concat([result_df, ult_chunk])
+            result_df = pd.concat([result_df, chunk_matches])
     else:
         print("Reading origin file in normal mode...")
         # Find the origin file matches
         mark_matches_kwargs["dataset_a"] = origin_df
         origin_matches = mark_matches(**mark_matches_kwargs)
-        # Merge the origin file with the needed columns
-        merge_datasets_kwargs["dataset_a"] = origin_matches
-        result_df = merge_datasets(**merge_datasets_kwargs)
+        if SYS_ARGS.copy_columns:
+            # Merge the chunk with the needed columns
+            merge_datasets_kwargs["dataset_a"] = origin_matches
+            origin_matches = merge_datasets(**merge_datasets_kwargs)
+        result_df = origin_matches
 
     # Change all strings to uppercase (random requirement, lol)
     if SYS_ARGS.uppercase:
