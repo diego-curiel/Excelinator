@@ -92,7 +92,12 @@ def get_system_args() -> ap.Namespace:
         type=Path,
         required=True
     )
-
+    # Save file as an Excel spreadsheet
+    parser.add_argument(
+        '--xlsx',
+        help='Save the output file as an Excel spreadsheet.',
+        action='store_true'
+    )
     return parser.parse_args()
 
 
@@ -157,15 +162,16 @@ def mark_matches(dataset_a: pd.DataFrame, dataset_b: pd.DataFrame,
             False: missmatch_marker,
         }
     
-    map_a = dataset_a.loc[:,index_column_a]
-    map_b = dataset_b.loc[:, index_column_b]
-    dataset_a[result_column_name] = map_a.isin(
-               map_b 
-            ).map(lambda x: mapping.get(bool(x), x))
+    index_a = dataset_a.loc[:,index_column_a]
+    index_b = dataset_b.loc[:, index_column_b]
+    dataset_a[result_column_name] = index_a.isin(index_b).map(
+        lambda x: mapping.get(bool(x), x)
+    )
 
     # Remove missmatches
     if drop_missmatches:
-        dataset_a = dataset_a.loc[dataset_a[result_column_name] == match_marker]
+        match_mask = dataset_a[result_column_name] == match_marker
+        dataset_a = dataset_a.loc[match_mask]
 
     return dataset_a.copy()
 
@@ -243,8 +249,7 @@ def get_filename_extension(file_path:Path) -> str:
         raise SystemExit(
             "The file {f} does not exist".format(f=file_path)
         )
-
-    return str(file_path).split(".")[-1]
+    return file_path.suffix.strip('.') 
 
 
 def get_real_extension(file_path:Path) -> str:
@@ -309,7 +314,9 @@ def get_read_kwargs(file_path:Path|str, file_extension:str,
 
     if isinstance(file_path, str):
         file_path = Path(file_path)
-    
+
+    # Set extension to lowercase always
+    file_extension = file_extension.lower()    
     read_kwargs = dict()
     # Select the correct parameter for the type file
     if file_extension == "xlsx":
@@ -361,7 +368,7 @@ def main():
                                          lazy_load=ORIGIN_LAZY_LOAD) 
 
     # Apply kwargs and select the correct function according to the file type
-    print("Reading the origin file...")
+    print("Loading the origin file...")
     origin_df = READ_FUNCTIONS[ORIGIN_EXTENSION](**origin_read_kwargs)
 
     # Set the correct kwargs for the partner type file 
@@ -369,7 +376,7 @@ def main():
                                           file_extension=PARTNER_EXTENSION,
                                           lazy_load=False) # <- Not supported
       
-    print("Reading the partner file...")
+    print("Loading the partner file...")
     partner_df = READ_FUNCTIONS[PARTNER_EXTENSION](**partner_read_kwargs)
     
     mark_matches_kwargs: dict[Any, Any] = {
@@ -418,7 +425,16 @@ def main():
         result_df.columns = [to_upper(x) for x in result_df.columns]
    
     print("Saving file...")
-    result_df.to_csv(SAVE_PATH, index=False, encoding="UTF-8")
+    if SYS_ARGS.xlsx:
+        save_file_ext = get_filename_extension(SAVE_PATH)
+        save_path = SAVE_PATH
+        if not save_file_ext == 'xlsx':
+            save_path = "{p}.xlsx".format(p=SAVE_PATH)
+        with pd.ExcelWriter(save_path, engine='xlsxwriter') as excel_writer:
+            result_df.to_excel(excel_writer, index=False)
+
+    else:
+        result_df.to_csv(SAVE_PATH, index=False, encoding="UTF-8")
 
 
 if __name__ == "__main__":
