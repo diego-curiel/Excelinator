@@ -1,7 +1,6 @@
 import pandas as pd
 
 import argparse as ap
-import time
 import os
 from pathlib import Path
 from typing import Any, Dict
